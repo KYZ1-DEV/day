@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DayNotes - Daily Planner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Tailwind Config for Custom Fonts/Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        
+        /* Mencegah highlight biru saat di-tap di HP */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Utilitas Glassmorphism Khusus (Tema Elegan / Gelap) */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.4); /* Slate 800 dengan transparansi */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .glass-input {
+            background: rgba(15, 23, 42, 0.5); /* Slate 900 */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+        }
+        
+        .glass-input::placeholder {
+            color: #64748b;
+        }
+
+        .glass-input:focus {
+            background: rgba(15, 23, 42, 0.8);
+            outline: none;
+            border-color: rgba(99, 102, 241, 0.5); /* Indigo accent */
+        }
+
+        /* Efek coret halus untuk tugas selesai */
+        .task-completed {
+            text-decoration: line-through;
+            color: rgba(148, 163, 184, 0.5); /* Slate 400 dim */
+            transition: all 0.3s ease;
+        }
+
+        /* Style khusus kalender bawaan browser agar terlihat bagus di dark mode */
+        ::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 min-h-screen text-slate-100 font-sans flex flex-col overflow-hidden relative selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <!-- Animasi Latar Belakang Gelembung (Elegan & Halus) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-900/30 rounded-full mix-blend-screen filter blur-3xl animate-blob"></div>
+        <div class="absolute top-[20%] right-[-10%] w-96 h-96 bg-blue-900/20 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-2000"></div>
+        <div class="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-violet-900/20 rounded-full mix-blend-screen filter blur-3xl animate-blob animation-delay-4000"></div>
+    </div>
+
+    <!-- Header / Navigasi Tanggal -->
+    <header class="glass-panel z-10 sticky top-0 px-5 py-5 flex flex-col gap-4 rounded-b-3xl border-t-0 border-l-0 border-r-0">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-white drop-shadow-sm">DayNotes.</h1>
+                <p class="text-sm text-slate-400 font-medium mt-0.5" id="displayFullDate">Memuat tanggal...</p>
+            </div>
+            <div class="h-11 w-11 rounded-full glass-panel flex items-center justify-center text-slate-300 cursor-pointer hover:bg-white/10 hover:text-white transition shadow-sm" onclick="document.getElementById('datePicker').showPicker()">
+                <i class="ph ph-calendar-blank text-2xl"></i>
+            </div>
+        </div>
+        
+        <!-- Pemilih Tanggal -->
+        <div class="relative w-full">
+            <input type="date" id="datePicker" class="w-full glass-input rounded-xl px-4 py-2.5 font-medium text-slate-200 appearance-none bg-slate-800/50 backdrop-blur-md" onchange="changeDate(this.value)">
+            <!-- Tombol navigasi cepat (Kemarin, Hari ini, Besok) -->
+            <div class="flex justify-between mt-3 gap-2">
+                <button onclick="navigateDate(-1)" class="flex-1 glass-panel text-slate-300 py-2 rounded-xl text-xs font-medium active:scale-95 transition hover:bg-white/5">Kemarin</button>
+                <button onclick="goToToday()" class="flex-1 bg-indigo-600/90 border border-indigo-500/50 text-white py-2 rounded-xl text-xs font-bold active:scale-95 transition shadow-lg shadow-indigo-500/20">Hari Ini</button>
+                <button onclick="navigateDate(1)" class="flex-1 glass-panel text-slate-300 py-2 rounded-xl text-xs font-medium active:scale-95 transition hover:bg-white/5">Besok</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Area Daftar Tugas -->
+    <main class="flex-1 z-10 overflow-y-auto px-5 pt-6 pb-28" id="taskListContainer">
+        <!-- Area Kosong -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center h-full text-slate-400 mt-10">
+            <i class="ph ph-moon-stars text-6xl mb-4 opacity-50 text-indigo-300"></i>
+            <p class="text-lg font-medium text-slate-300">Belum ada catatan hari ini.</p>
+            <p class="text-sm opacity-70 text-center mt-1">Rencanakan sesuatu yang luar biasa <br> untuk harimu!</p>
+        </div>
+
+        <!-- Daftar Tugas -->
+        <div id="taskList" class="flex flex-col gap-3">
+            <!-- Item tugas template akan dirender di sini oleh JS -->
+        </div>
+    </main>
+
+    <!-- Area Tambah Tugas (Fixed Bottom) -->
+    <footer class="fixed bottom-0 left-0 right-0 z-20 p-5 pb-6 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+        <form id="addForm" class="glass-panel rounded-2xl p-2 flex gap-2 items-center shadow-2xl border border-slate-700/50" onsubmit="addTask(event)">
+            <input type="text" id="taskInput" placeholder="Tuliskan rencanamu..." required
+                class="flex-1 bg-transparent px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none font-medium">
+            <button type="submit" class="h-11 w-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 active:scale-90 transition transform">
+                <i class="ph ph-paper-plane-right text-xl font-bold"></i>
+            </button>
+        </form>
+    </footer>
+
+    <!-- Modal Edit Tugas -->
+    <div id="editModal" class="fixed inset-0 z-50 hidden items-center justify-center px-5 backdrop-blur-md bg-slate-950/60 opacity-0 transition-opacity duration-300">
+        <div class="glass-panel bg-slate-900/80 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-700/50 transform scale-95 transition-transform duration-300" id="editModalContent">
+            <h3 class="text-xl font-bold text-white mb-5">Ubah Catatan</h3>
+            <input type="hidden" id="editTaskId">
+            <input type="text" id="editTaskInput" class="w-full glass-input rounded-xl px-4 py-3 mb-6 font-medium text-white" placeholder="Nama tugas...">
+            <div class="flex gap-3">
+                <button onclick="closeEditModal()" class="flex-1 glass-panel py-3 rounded-xl font-medium text-slate-300 hover:text-white hover:bg-white/10 active:scale-95 transition">Batal</button>
+                <button onclick="saveEdit()" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-medium shadow-lg shadow-indigo-500/30 active:scale-95 transition hover:bg-indigo-500">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Logika Aplikasi -->
+    <script>
+        // --- 1. INISIALISASI STATE ---
+        // Mendukung migrasi data dari nama aplikasi lama (hariini_tasks) ke nama baru (daynotes_tasks)
+        let tasks = JSON.parse(localStorage.getItem('daynotes_tasks')) || JSON.parse(localStorage.getItem('hariini_tasks')) || [];
+        let selectedDate = getTodayString();
+
+        // --- 2. FUNGSI UTILITAS TANGGAL ---
+        function getTodayString() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateDisplay(dateString) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', options);
+        }
+
+        function navigateDate(days) {
+            const currentDate = new Date(selectedDate);
+            currentDate.setDate(currentDate.getDate() + days);
+            
+            const year = currentDate.getFullYear();
+            const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+            const day = String(currentDate.getDate()).padStart(2, '0');
+            
+            changeDate(`${year}-${month}-${day}`);
+        }
+
+        function goToToday() {
+            changeDate(getTodayString());
+        }
+
+        // --- 3. FUNGSI LOGIKA APLIKASI ---
+        function init() {
+            document.getElementById('datePicker').value = selectedDate;
+            updateDateDisplay();
+            renderTasks();
+            
+            // Simpan data dengan nama baru (jika sebelumnya pakai nama lama)
+            saveTasks(); 
+        }
+
+        function changeDate(newDate) {
+            if(!newDate) return;
+            selectedDate = newDate;
+            document.getElementById('datePicker').value = selectedDate;
+            updateDateDisplay();
+            renderTasks();
+        }
+
+        function updateDateDisplay() {
+            const displayEl = document.getElementById('displayFullDate');
+            if (selectedDate === getTodayString()) {
+                displayEl.innerHTML = `Hari ini, ${formatDateDisplay(selectedDate)}`;
+            } else {
+                displayEl.innerHTML = formatDateDisplay(selectedDate);
+            }
+        }
+
+        function saveTasks() {
+            localStorage.setItem('daynotes_tasks', JSON.stringify(tasks));
+        }
+
+        // --- 4. FUNGSI CRUD ---
+        
+        // CREATE
+        function addTask(event) {
+            event.preventDefault();
+            const inputEl = document.getElementById('taskInput');
+            const text = inputEl.value.trim();
+            
+            if (text === "") return;
+
+            const newTask = {
+                id: Date.now(),
+                text: text,
+                date: selectedDate,
+                completed: false
+            };
+
+            tasks.push(newTask);
+            saveTasks();
+            inputEl.value = '';
+            
+            renderTasks();
+            const container = document.getElementById('taskListContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // READ (Render)
+        function renderTasks() {
+            const taskListEl = document.getElementById('taskList');
+            const emptyStateEl = document.getElementById('emptyState');
+            
+            const filteredTasks = tasks.filter(task => task.date === selectedDate);
+
+            if (filteredTasks.length === 0) {
+                emptyStateEl.classList.remove('hidden');
+                emptyStateEl.classList.add('flex');
+                taskListEl.innerHTML = '';
+                return;
+            } else {
+                emptyStateEl.classList.add('hidden');
+                emptyStateEl.classList.remove('flex');
+            }
+
+            // Generate HTML (Seluruh area kartu sekarang bisa di-klik berkat onclick di div utama)
+            taskListEl.innerHTML = filteredTasks.map(task => `
+                <div onclick="toggleTask(${task.id})" class="glass-panel p-4 rounded-2xl flex items-center gap-4 cursor-pointer transform transition-all duration-200 hover:scale-[1.01] hover:bg-slate-800/40 border border-transparent hover:border-slate-700/50">
+                    
+                    <!-- Checkbox Indikator -->
+                    <div class="flex-shrink-0 w-6 h-6 rounded-full border-[2.5px] ${task.completed ? 'border-indigo-500 bg-indigo-500 text-white shadow-sm shadow-indigo-500/50' : 'border-slate-600 bg-transparent'} flex items-center justify-center transition-all duration-300">
+                        ${task.completed ? '<i class="ph ph-check font-bold text-sm"></i>' : ''}
+                    </div>
+                    
+                    <!-- Teks Tugas -->
+                    <span class="flex-1 text-[15px] font-medium ${task.completed ? 'task-completed' : 'text-slate-200'} break-words">
+                        ${task.text}
+                    </span>
+                    
+                    <!-- Aksi (event.stopPropagation mencegah kartu tertoggle saat menekan tombol aksi) -->
+                    <div class="flex gap-1">
+                        <button onclick="event.stopPropagation(); openEditModal(${task.id}, '${task.text.replace(/'/g, "\\'")}')" class="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-slate-800/80 transition-all">
+                            <i class="ph ph-pencil-simple text-lg"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteTask(${task.id})" class="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 transition-all">
+                            <i class="ph ph-trash text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // UPDATE (Toggle)
+        function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasks();
+                renderTasks();
+            }
+        }
+
+        // DELETE
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasks();
+            renderTasks();
+        }
+
+        // --- 5. LOGIKA MODAL EDIT ---
+        const modal = document.getElementById('editModal');
+        const modalContent = document.getElementById('editModalContent');
+
+        function openEditModal(id, currentText) {
+            document.getElementById('editTaskId').value = id;
+            document.getElementById('editTaskInput').value = currentText;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+                document.getElementById('editTaskInput').focus();
+            }, 10);
+        }
+
+        function closeEditModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300);
+        }
+
+        function saveEdit() {
+            const id = parseInt(document.getElementById('editTaskId').value);
+            const newText = document.getElementById('editTaskInput').value.trim();
+            
+            if (newText !== "") {
+                const task = tasks.find(t => t.id === id);
+                if (task) {
+                    task.text = newText;
+                    saveTasks();
+                    renderTasks();
+                }
+            }
+            closeEditModal();
+        }
+
+        // Menutup modal jika area blur di-klik
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeEditModal();
+            }
+        });
+
+        // --- 6. JALANKAN SAAT MULAI ---
+        init();
+
+    </script>
+</body>
+</html>
